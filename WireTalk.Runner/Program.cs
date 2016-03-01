@@ -29,13 +29,13 @@ namespace WireTalk.Runner
 
             return r;
         }
-
+        static Random rnd = new Random();
         static async Task<Response> habibi(Request request)
         {
             Response r = new Response();
             r.Status = 200;
             r.Data = request.Params["habibi"];
-
+            await Task.Delay(rnd.Next(10, 1000));
             return r;
         }
     }

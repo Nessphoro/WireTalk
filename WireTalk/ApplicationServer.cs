@@ -13,10 +13,14 @@ namespace WireTalk
 {
     public class ApplicationServer
     {
+        
         TcpListener _tcpServer;
         CancellationToken _globalCancelationToken;
         Router _router;
         Parser _parser;
+
+        const int concurency = 20;
+        Task[] tasks = new Task[concurency];
 
         public ApplicationServer(IPAddress bindIp, int port)
         {
@@ -32,35 +36,52 @@ namespace WireTalk
 
         public Task<Exception> Start()
         {
-            _tcpServer.Start();
+            _tcpServer.Start(100);
 
             return Run();
         }
 
         protected async Task<Exception> Run()
         {
-            
-            while (!_globalCancelationToken.IsCancellationRequested)
+            for(int i=0;i<concurency;i++)
             {
-                TcpClient client = await _tcpServer.AcceptTcpClientAsync();
-                NetworkStream ns = client.GetStream();
-
-                ParserState parserState = await GetParsedState(client, ns);
-
-                Request request = new Request();
-                request.Headers = parserState.Headers;
-                request.Method = parserState.Method;
-                request.Path = parserState.RequestURL;
-                request.Params = new Dictionary<string, string>();
-
-                Response response = await _router.Route(request);
-
-                await SendResponse(ns, response);
-
-                client.Close();
+                DispatchRequest(i);
             }
 
+            _globalCancelationToken.WaitHandle.WaitOne();
+
             return new OperationCanceledException();
+        }
+
+        protected async Task DispatchRequest(int id)
+        {
+            while(!_globalCancelationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    TcpClient client = await _tcpServer.AcceptTcpClientAsync();
+                    NetworkStream ns = client.GetStream();
+
+                    ParserState parserState = await GetParsedState(client, ns);
+
+                    Request request = new Request();
+                    request.Headers = parserState.Headers;
+                    request.Method = parserState.Method;
+                    request.Path = parserState.RequestURL;
+                    request.Params = new Dictionary<string, string>();
+
+                    Response response = await _router.Route(request);
+
+                    await SendResponse(ns, response);
+
+                    client.Close();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+            }
+            
         }
 
         protected async Task SendResponse(NetworkStream ns, Response response)
@@ -87,13 +108,15 @@ namespace WireTalk
 
         protected async Task<ParserState> GetParsedState(TcpClient client, NetworkStream ns)
         {
+            DateTime start = DateTime.Now;
             HTTP.ParserState parserState = new HTTP.ParserState();
-
             bool needMore = true;
             int parseIndex = -1;
 
             while (needMore)
             {
+                if ((DateTime.Now - start).TotalSeconds > 5)
+                    throw new OperationCanceledException();
                 if (ns.DataAvailable)
                 {
                     int dataToRead = client.Available;
