@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WireTalk.Runner", "WireTalk.Runner\WireTalk.Runner.csproj", "{A82F17BF-3373-42A9-8C6A-A128B87FB6B2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WireTalk", "WireTalk\WireTalk.csproj", "{513D8311-55BB-4D79-A52A-0F0D405E85FC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A82F17BF-3373-42A9-8C6A-A128B87FB6B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A82F17BF-3373-42A9-8C6A-A128B87FB6B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A82F17BF-3373-42A9-8C6A-A128B87FB6B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A82F17BF-3373-42A9-8C6A-A128B87FB6B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{513D8311-55BB-4D79-A52A-0F0D405E85FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{513D8311-55BB-4D79-A52A-0F0D405E85FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{513D8311-55BB-4D79-A52A-0F0D405E85FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{513D8311-55BB-4D79-A52A-0F0D405E85FC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
