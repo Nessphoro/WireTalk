@@ -11,6 +11,6 @@ namespace WireTalk.Routing
         public string Path;
         public string Method;
         public Dictionary<string, string> Headers;
-        public Dictionary<string, string> Params;
+        public Dictionary<string, string> Params = new Dictionary<string,string>();
     }
 }

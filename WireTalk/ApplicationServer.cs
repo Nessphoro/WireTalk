@@ -19,9 +19,6 @@ namespace WireTalk
         Router _router;
         Parser _parser;
 
-        const int concurency = 20;
-        Task[] tasks = new Task[concurency];
-
         public ApplicationServer(IPAddress bindIp, int port)
         {
             _tcpServer = new TcpListener(bindIp, port);
@@ -36,75 +33,81 @@ namespace WireTalk
 
         public Task<Exception> Start()
         {
-            _tcpServer.Start(100);
+            _tcpServer.Start();
 
             return Run();
         }
 
         protected async Task<Exception> Run()
         {
-            for(int i=0;i<concurency;i++)
+            while(!_globalCancelationToken.IsCancellationRequested)
             {
-                DispatchRequest(i);
+                TcpClient client = await _tcpServer.AcceptTcpClientAsync();
+                DispatchClient(client);
             }
-
-            _globalCancelationToken.WaitHandle.WaitOne();
 
             return new OperationCanceledException();
         }
 
-        protected async Task DispatchRequest(int id)
+        protected async Task DispatchClient(TcpClient client)
         {
-            while(!_globalCancelationToken.IsCancellationRequested)
+            try
             {
-                try
+                client.Client.NoDelay = true;
+                NetworkStream ns = client.GetStream();
+                ParserState parserState = await GetParsedState(client, ns);
+                bool close = true;
+                if (parserState.Error.GetType() != typeof(TimeoutException))
                 {
-                    TcpClient client = await _tcpServer.AcceptTcpClientAsync();
-                    NetworkStream ns = client.GetStream();
+                    if(parserState.Headers["Connection"] == "upgrade")
+                    {
+                        if (parserState.Headers["Upgrade"] == "websocket")
+                        {
+                            Console.WriteLine("Negotiating websocket");
+                            WebSocket.Websocket ws = new WebSocket.Websocket(client, ns, parserState);
+                            try
+                            {
+                                await ws.Negotiate();
+                                close = false;
+                                return;
+                            }
+                            catch
+                            {
+                                close = true;
+                            }
+                        }
+                    }
 
-                    ParserState parserState = await GetParsedState(client, ns);
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(">>> {0} {1} {2}", parserState.Method, parserState.RequestURL, parserState.QueryURL);
+                    foreach(var kvp in parserState.Headers)
+                    {
+                        Console.WriteLine("\t{0}: {1}", kvp.Key, kvp.Value);
+                    }
 
                     Request request = new Request();
+
+
                     request.Headers = parserState.Headers;
                     request.Method = parserState.Method;
                     request.Path = parserState.RequestURL;
                     request.Params = new Dictionary<string, string>();
 
-                    Response response = await _router.Route(request);
+                    Response response = await _router.Route(request, request.Path);
+                    response.Headers.Add("Connection", "close");
+                    await Helpers.SendResponse(ns, response);
+                }
 
-                    await SendResponse(ns, response);
-
+                if(close)
                     client.Close();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
             }
-            
-        }
-
-        protected async Task SendResponse(NetworkStream ns, Response response)
-        {
-            response.Headers.Add("Connection", "close");
-            response.Headers.Add("Content-Type", "text/plain; charset=utf-8");
-            response.Headers.Add("Date", DateTime.Now.ToUniversalTime().ToString("r"));
-            response.Headers.Add("Content-Length", Encoding.UTF8.GetByteCount(response.Data).ToString());
-
-            StringBuilder head = new StringBuilder();
-            head.Append("HTTP/1.1 ");
-            head.Append(response.Status);
-            head.Append(" OK \r\n");
-            foreach(KeyValuePair<string, string> kvp in response.Headers)
+            catch (Exception e)
             {
-                head.AppendFormat("{0}: {1}\r\n", kvp.Key, kvp.Value);
+                Console.WriteLine(e.Message);
             }
-            head.Append("\r\n");
-            head.Append(response.Data);
-
-            byte[] data = Encoding.UTF8.GetBytes(head.ToString());
-            await ns.WriteAsync(data, 0, data.Length);
         }
+
+        
 
         protected async Task<ParserState> GetParsedState(TcpClient client, NetworkStream ns)
         {
@@ -116,7 +119,10 @@ namespace WireTalk
             while (needMore)
             {
                 if ((DateTime.Now - start).TotalSeconds > 5)
-                    throw new OperationCanceledException();
+                {
+                    parserState.Error = new TimeoutException();
+                    return parserState;
+                }
                 if (ns.DataAvailable)
                 {
                     int dataToRead = client.Available;

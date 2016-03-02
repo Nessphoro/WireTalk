@@ -20,8 +20,11 @@ namespace WireTalk.HTTP
 
         public ParserAutomatonState AutomatonState;
 
+        public Exception Error;
+
         public ParserState()
         {
+            Error = new Exception();
             Buffer = new StringBuilder(128);
             Headers = new Dictionary<string, string>();
             QueryURL = "";

@@ -8,15 +8,26 @@ using System.Threading.Tasks;
 namespace WireTalk.Routing
 {
     public delegate Task<Response> RoutingDelegate(Request request);
+    public enum MountPoint
+    {
+        Function, Router
+    }
+
     public class RoutingInfo
     {
+        public MountPoint MountType;
         public Regex Expression;
         public List<string> Parameters;
+
         public RoutingDelegate Callback;
+        public Router Router;
+
         public string Method;
     }
     public class Router
     {
+        static Response NotFound = new Response() { Status = 404, Headers = new Dictionary<string, string>(), Data = null };
+
         Dictionary<string, List<RoutingInfo>> routings;
         public Router()
         {
@@ -26,7 +37,7 @@ namespace WireTalk.Routing
             routings.Add("HEAD", new List<RoutingInfo>());
         }
 
-        private RoutingInfo getRountingInfo(string path)
+        private RoutingInfo getRountingInfo(string path, bool terminator = true)
         {
             StringBuilder regularExpression = new StringBuilder(path.Length * 2);
             List<string> parameters = new List<string>();
@@ -74,16 +85,28 @@ namespace WireTalk.Routing
                 regexpMode = false;
             }
 
+
             if (regularExpression.ToString().Last() == '/')
             {
-                regularExpression.Append("?$");
+                if (terminator)
+                {
+                    regularExpression.Append("?$");
+                }
+      
             }
             else
             {
-                regularExpression.Append("/?$");
+                if (terminator)
+                {
+                    regularExpression.Append("/?$");
+                }
+                else
+                {
+                    regularExpression.Append("/?");
+                }
             }
 
-            return new RoutingInfo() { Expression = new Regex(regularExpression.ToString(), RegexOptions.Compiled | RegexOptions.ExplicitCapture), Parameters = parameters };
+            return new RoutingInfo() { Expression = new Regex(regularExpression.ToString(), RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase), Parameters = parameters };
         }
 
         public void Get(string path, RoutingDelegate callback)
@@ -95,25 +118,38 @@ namespace WireTalk.Routing
             routings["GET"].Add(rinfo);
         }
 
-        public Task<Response> Route(Request request)
+        public void Mount(string path, Router router)
+        {
+            RoutingInfo rinfo = getRountingInfo(path, false);
+            rinfo.MountType = MountPoint.Router;
+            rinfo.Router = router;
+            rinfo.Method = "GET";
+
+            routings["GET"].Add(rinfo);
+        }
+
+        public Task<Response> Route(Request request, string mt)
         {
             List<RoutingInfo> rinfos = routings[request.Method];
             foreach(RoutingInfo routing in rinfos)
             {
-                Match match = routing.Expression.Match(request.Path);
+                Match match = routing.Expression.Match(mt);
                 if(match.Success)
                 {
-                    request.Params = new Dictionary<string, string>();
                     foreach(string param in routing.Parameters)
                     {
                         request.Params.Add(param, match.Groups[param].Value);
                     }
-                    return routing.Callback(request);
+
+                    if (routing.MountType == MountPoint.Function)
+                        return routing.Callback(request);
+                    else
+                        return routing.Router.Route(request, mt.Substring(match.Length));
                 }
                 
             }
 
-            return null;
+            return Task.FromResult(NotFound);
         }
     }
 }
